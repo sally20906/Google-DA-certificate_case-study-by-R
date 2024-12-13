@@ -1,4 +1,3 @@
-setwd("C:/Users/user/Onedrive/桌面")
 
 install.packages("readr")
 install.packages("data.table")
@@ -41,7 +40,7 @@ ggplot(trip_2019_Q1_customer) +
   labs(title = "Total of Customer by Gender",subtitle = "Data in 2019 Q1", y = "Count") +
   theme_minimal()
 
-# 計算 usertype 的總數
+# usertype 的總數
 total_count <- nrow(trip_2019_Q1)
 usertype_counts <- table(trip_2019_Q1$usertype) ##可以直接把兩種type分開
 prop.table(usertype_counts) * 100
@@ -99,10 +98,6 @@ avg_duration_Q1_gender <- trip_2019_Q1_2 %>%
   group_by(usertype, gender) %>%
   summarise(mean = mean(ride_duration))
 
-avg_duration_Q1_gender <- trip_2019_Q1_2  %>%
-  group_by(usertype, gender) %>%
-  summarise(mean = mean(ride_duration))
-
 ggplot(avg_duration_Q1_gender) + geom_col(mapping=aes(x=gender, y=mean, fill=gender)) + 
   facet_wrap(~usertype)+
   labs(title = "Average Ride Duration of gender by User Type", subtitle = "Data in 2019 Q1", y="AVG Ride Duration")
@@ -112,7 +107,78 @@ ggplot(avg_duration_Q1_gender) + geom_col(mapping=aes(x=gender, y=mean, fill=gen
   facet_wrap(~usertype)+
   labs(title = "Average Ride Duration of gender by User Type", subtitle = "Data in 2019 Q1", y="AVG Ride Duration")
 
+##可看每一季共享單車使用數趨勢及最低點
+min_date <- Q1_2019 %>% filter(N == min(N)) %>% pull(Date) 
+ggplot(Q1_2019, aes(x = Date, y = N)) +
+  geom_line() +
+  labs(x = "Day", y = "Number of useage", title = "Ride over time") +
+  scale_x_date(breaks = "15 day") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1))+
+  geom_vline(xintercept = as.numeric(min_date), color = "blue", linetype = "dashed")
 
 
+#依照相同規則處理Q1~Q4資料
+##合併2019年四季資料
+trip_2019_Q4 <- trip_2019_Q4 %>%
+  mutate(start_date = substr(start_time, 1, 10))
 
+str(trip_2019_Q4$start_date)
+trip_2019_Q4$start_date <- as.Date(trip_2019_Q4$start_date)
+
+Q4_2019 <- trip_2019_Q4[ ,.N, by=start_date]
+setnames(Q4_2019, "start_date", "Date")
+trip_by_date <- merge(trip_by_date, Q4_2019, by="Date" , all.x = TRUE)
+
+
+#2019年每日共享單車使用數
+trip_by_date <- trip_by_date %>%
+  mutate(N.x = ifelse(is.na(N.x), 0, N.x),
+         N.y = ifelse(is.na(N.y), 0, N.y)) %>%
+  mutate(N = N.x+N.y)%>%
+  select(-N.x) %>%
+  select(-N.y)
+
+##將usertype total count按每個月分開
+Q1_month <- trip_2019_Q1[ , c("Date", "usertype")]
+Q1_month <- Q1_month %>% mutate(month = substr(Date, 6, 7)) %>% group_by(month, usertype) %>%
+  select(-Date) %>%summarize(count = n()) %>%
+  pivot_wider(names_from = usertype, values_from = count)
+
+
+Q2_month <- trip_2019_Q2[ , c("start_date", "usertype")]
+Q2_month <- Q2_month %>% mutate(month = substr(start_date, 6, 7)) %>% group_by(month, usertype) %>%
+  select(-start_date) %>%summarize(count = n()) %>%
+  pivot_wider(names_from = usertype, values_from = count)
+
+Q3_month <- trip_2019_Q3[ , c("start_date", "usertype")]
+Q3_month <- Q3_month %>% mutate(month = substr(start_date, 6, 7)) %>% group_by(month, usertype) %>%
+  select(-start_date) %>%summarize(count = n()) %>%
+  pivot_wider(names_from = usertype, values_from = count)
+
+Q4_month <- trip_2019_Q4[ , c("start_date", "usertype")]
+Q4_month <- Q4_month %>% mutate(month = substr(start_date, 6, 7)) %>% group_by(month, usertype) %>%
+  select(-start_date) %>%summarize(count = n()) %>%
+  pivot_wider(names_from = usertype, values_from = count)
+
+month_by_user <- bind_rows(Q1_month, Q2_month, Q3_month, Q4_month)
+month_by_user <- month_by_user %>%
+  pivot_longer(cols = c(Subscriber, Customer), 
+               names_to = "user_type", 
+               values_to = "count")
+
+ggplot(month_by_user, aes(x = as.factor(month), fill = user_type)) +
+  geom_bar(aes(y = count), stat = "identity", position = "dodge") +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    x = "Month", 
+    y = "Count",
+    fill = "user_type"
+  ) +
+  scale_fill_manual(values = c("Subscriber" = "skyblue", "Customer" = "orange")) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  ggtitle("Total Rides by Month")
 
